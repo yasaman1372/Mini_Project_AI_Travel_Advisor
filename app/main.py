@@ -4,7 +4,7 @@ from openai import APIError, OpenAIError
 from app.travel_advisor import TravelAdvisor
 
 
-def main():
+def main() -> None:
     load_dotenv()
 
     try:
@@ -18,6 +18,7 @@ def main():
     print("Plan your next trip!")
     print("Type 'exit' or 'quit' to end the conversation.\n")
 
+    previous_response_id: str | None = None
 
     try:
         while True:
@@ -31,13 +32,13 @@ def main():
                 continue
 
             try:
-                answer = advisor.get_response(user_message)
-                
+                answer, previous_response_id = advisor.get_response(
+                    user_message,
+                    previous_response_id,
+                )
                 print(f"\nAssistant: {answer}\n")
-
             except APIError as error:
                 print(f"\nOpenAI API error: {error}\n")
-
             except OpenAIError as error:
                 print(f"\nOpenAI client error: {error}\n")
 
