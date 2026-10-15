@@ -49,12 +49,13 @@ def chat(request: ChatRequest) -> ChatResponse:
             detail="Message must not be blank.",
         )
 
+
     try:
-        answer = advisor.get_response(message)
+        answer, response_id = advisor.get_response(message)
     except OpenAIError as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The AI provider could not process the request.",
         ) from error
-
-    return ChatResponse(answer=answer)
+    
+    return ChatResponse(answer=answer, response_id=response_id)

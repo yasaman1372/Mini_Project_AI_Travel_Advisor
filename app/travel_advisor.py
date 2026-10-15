@@ -313,9 +313,8 @@ class TravelAdvisor:
 
         self.client = OpenAI(api_key=api_key)
 
+    # ...existing code...
     def get_response(self, user_message: str) -> tuple[str, str]:
         """Send a message and return its text and response ID."""
-
         response = chat(user_message)
-     
-        return response.output_text
+        return response.output_text, response.id
