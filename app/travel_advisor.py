@@ -8,6 +8,7 @@ import requests
 from pydantic import BaseModel, Field
 
 MODEL = "gpt-6-luna"
+client = OpenAI()
 
 SYSTEM_PROMPT = """
 You are a friendly, practical AI travel advisor.
