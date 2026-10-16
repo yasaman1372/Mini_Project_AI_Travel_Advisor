@@ -55,6 +55,37 @@ The command-line version can be run separately:
 python -m app.main
 ```
 
+## React frontend
+
+The Vite + React app is in `frontend/` and runs separately from the FastAPI
+service. JavaScript dependencies are listed in `frontend/package.json`; install
+Node.js 18 or newer, then from the repository root run:
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Open the local URL printed by Vite. The example environment file points the
+frontend at the deployed API; change `VITE_API_BASE_URL` in `.env` to use another
+API URL.
+
+### Deploy on Vercel
+
+Create a Vercel project linked to this repository and set **Root Directory** to
+`frontend`. Vercel detects Vite automatically; use `npm run build` as the build
+command and `dist` as the output directory. Add this environment variable in the
+Vercel project settings:
+
+```env
+VITE_API_BASE_URL=https://mini-project-ai-travel-advisor.onrender.com
+```
+
+Keep `OPENAI_API_KEY` on the FastAPI service in Render. Do not add it to the
+React app or Vercel environment.
+
 ## API
 
 ### `GET /health`
