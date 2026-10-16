@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 MODEL = "gpt-6-luna"
 HTTP_TIMEOUT = (3, 5)
 MAX_TOOL_ROUNDS = 4
-INLINE_CITATION_RE = re.compile(r"\(?\[([^\]]+)\]\((https?://[^)\s]+)\)\)?")
+INLINE_CITATION_RE = re.compile(r"\(?\[([^\]]+)\]\((https?://[^)\s]+)\)\)?[.,;:]?")
 
 SYSTEM_PROMPT = """You are a friendly, practical AI travel advisor.
 Help the user plan a personalized, realistic trip through conversation.
@@ -89,6 +89,7 @@ class AdvisorReply(BaseModel):
     status: Literal["needs_info", "complete"]
     response_id: str
     message: str | None = None
+    sources: list[Source] | None = None
     plan: TravelPlan | None = None
 
 
@@ -337,6 +338,7 @@ class TravelAdvisor:
             raise RuntimeError("The model returned no structured response.")
 
         sources.extend(extract_web_sources(response))
+        follow_up = remove_inline_citations(parsed.follow_up, sources)
         plan_values = {
             "title": parsed.title,
             "summary": parsed.summary,
@@ -355,12 +357,13 @@ class TravelAdvisor:
             plan_values["practical_tips"],
             plan_values["budget"],
         )
-        if parsed.follow_up.strip() or not all(
+        if follow_up or not all(
             section.strip() for section in plan_sections
         ):
             return AdvisorReply(
                 status="needs_info",
-                message=parsed.follow_up.strip() or "What trip details would you like to add?",
+                message=follow_up or "What trip details would you like to add?",
+                sources=[Source(title=title, url=url) for title, url in sources],
                 response_id=response.id,
             )
 

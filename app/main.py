@@ -39,6 +39,8 @@ def main() -> None:
                 previous_response_id = reply.response_id
                 if reply.status == "needs_info":
                     print(f"\nAssistant: {reply.message}\n")
+                    for source in reply.sources or []:
+                        print(f"Source: {source.title} ({source.url})")
                     continue
 
                 plan = reply.plan

@@ -114,7 +114,8 @@ If more trip details are needed, the response contains a follow-up message:
 {
   "status": "needs_info",
   "response_id": "...",
-  "message": "How many days will you be traveling?"
+  "message": "How many days will you be traveling?",
+  "sources": []
 }
 ```
 

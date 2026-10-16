@@ -26,9 +26,9 @@ function PlanSection({ title, children }) {
   );
 }
 
-function PlanDetails({ plan }) {
-  const safeSources = Array.isArray(plan.sources)
-    ? plan.sources.filter((source) => {
+function SourceLinks({ sources }) {
+  const safeSources = Array.isArray(sources)
+    ? sources.filter((source) => {
         try {
           return ["http:", "https:"].includes(new URL(source.url).protocol);
         } catch {
@@ -37,6 +37,25 @@ function PlanDetails({ plan }) {
       })
     : [];
 
+  if (safeSources.length === 0) return null;
+
+  return (
+    <section className="plan-section plan-sources">
+      <h3>Sources</h3>
+      <ul>
+        {safeSources.map((source, index) => (
+          <li key={`${source.url}-${index}`}>
+            <a href={source.url} target="_blank" rel="noopener noreferrer">
+              {source.title || source.url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PlanDetails({ plan }) {
   return (
     <div className="plan-details">
       <h2 className="plan-title">{plan.title}</h2>
@@ -44,20 +63,7 @@ function PlanDetails({ plan }) {
       <PlanSection title="Day-by-day itinerary">{plan.itinerary}</PlanSection>
       <PlanSection title="Practical tips">{plan.practical_tips}</PlanSection>
       <PlanSection title="Estimated budget">{plan.budget}</PlanSection>
-      {safeSources.length > 0 && (
-        <section className="plan-section plan-sources">
-          <h3>Sources</h3>
-          <ul>
-            {safeSources.map((source, index) => (
-              <li key={`${source.url}-${index}`}>
-                <a href={source.url} target="_blank" rel="noopener noreferrer">
-                  {source.title || source.url}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <SourceLinks sources={plan.sources} />
     </div>
   );
 }
@@ -72,7 +78,10 @@ function AssistantMessage({ message }) {
         {message.plan ? (
           <PlanDetails plan={message.plan} />
         ) : (
-          <p>{message.text}</p>
+          <>
+            <p>{message.text}</p>
+            <SourceLinks sources={message.sources} />
+          </>
         )}
       </div>
     </article>
@@ -154,7 +163,12 @@ export default function App() {
       if (data.status === "needs_info" && typeof data.message === "string") {
         setMessages((current) => [
           ...current,
-          { id: makeId(), role: "assistant", text: data.message },
+          {
+            id: makeId(),
+            role: "assistant",
+            text: data.message,
+            sources: data.sources,
+          },
         ]);
       } else if (data.status === "complete" && data.plan?.title) {
         setMessages((current) => [
