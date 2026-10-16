@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 MODEL = "gpt-6-luna"
 HTTP_TIMEOUT = (3, 5)
 MAX_TOOL_ROUNDS = 4
+INLINE_CITATION_RE = re.compile(r"\(?\[([^\]]+)\]\((https?://[^)\s]+)\)\)?")
 
 SYSTEM_PROMPT = """You are a friendly, practical AI travel advisor.
 Help the user plan a personalized, realistic trip through conversation.
@@ -48,8 +49,8 @@ seasonal expectations instead. Label retrieved data with its date, and treat
 exchange rates as approximate mid-market rates, not guaranteed card or bank rates.
 Use web search for current public-transport options, operator information, or
 service changes. Prefer official sources. Do not claim live availability or
-opening hours. Include clickable source URLs for retrieved facts and recommend
-checking details before booking.
+opening hours. Keep citations and URLs out of plan fields; sources are returned
+separately. Recommend checking details before booking.
 
 Respect any accessibility, dietary, safety, or budget constraints the user mentions.
 Be transparent when a specific recommendation or cost is uncertain.
@@ -235,6 +236,23 @@ def extract_web_sources(response) -> list[tuple[str, str]]:
     return sources
 
 
+def remove_inline_citations(
+    text: str, sources: list[tuple[str, str]]
+) -> str:
+    seen_urls = {url for _, url in sources}
+
+    def add_source(match: re.Match[str]) -> str:
+        title, url = match.groups()
+        if url not in seen_urls:
+            sources.append((title, url))
+            seen_urls.add(url)
+        return ""
+
+    cleaned_text = INLINE_CITATION_RE.sub(add_source, text)
+    cleaned_text = re.sub(r"[ \t]{2,}", " ", cleaned_text)
+    return cleaned_text.strip()
+
+
 class TravelAdvisor:
     """Creates travel advice while keeping conversation state in response IDs."""
 
@@ -313,12 +331,23 @@ class TravelAdvisor:
             raise RuntimeError("The model returned no structured response.")
 
         sources.extend(extract_web_sources(response))
+        plan_values = {
+            "title": parsed.title,
+            "summary": parsed.summary,
+            "itinerary": parsed.itinerary,
+            "practical_tips": parsed.practical_tips,
+            "budget": parsed.budget,
+        }
+        plan_values = {
+            key: remove_inline_citations(value, sources)
+            for key, value in plan_values.items()
+        }
         plan_sections = (
-            parsed.title,
-            parsed.summary,
-            parsed.itinerary,
-            parsed.practical_tips,
-            parsed.budget,
+            plan_values["title"],
+            plan_values["summary"],
+            plan_values["itinerary"],
+            plan_values["practical_tips"],
+            plan_values["budget"],
         )
         if parsed.follow_up.strip() or not all(
             section.strip() for section in plan_sections
@@ -330,11 +359,11 @@ class TravelAdvisor:
             )
 
         plan = TravelPlan(
-            title=parsed.title,
-            summary=parsed.summary,
-            itinerary=parsed.itinerary,
-            practical_tips=parsed.practical_tips,
-            budget=parsed.budget,
+            title=plan_values["title"],
+            summary=plan_values["summary"],
+            itinerary=plan_values["itinerary"],
+            practical_tips=plan_values["practical_tips"],
+            budget=plan_values["budget"],
             sources=[Source(title=title, url=url) for title, url in sources],
         )
         return AdvisorReply(
