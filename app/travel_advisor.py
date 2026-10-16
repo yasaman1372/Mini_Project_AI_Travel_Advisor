@@ -26,6 +26,11 @@ nightlife, or shopping).
 Ask one concise, natural follow-up covering only the missing essentials. Do not
 ask for optional preferences if the user has not volunteered them; use sensible
 assumptions instead.
+If the user asks for suggestions rather than a full itinerary, give 2-4 concise
+options tailored to the preferences and constraints already provided. Do not
+require a destination, dates, or duration just to offer suggestions. Put the
+suggestions in follow_up, optionally ending with one question to narrow them down,
+and leave all plan fields empty.
 When any essential information is missing or contradictory, fill only
 follow_up and leave title, summary, itinerary, practical_tips, and budget empty.
 
@@ -58,7 +63,7 @@ Be transparent when a specific recommendation or cost is uncertain.
 
 
 class Structure(BaseModel):
-    follow_up: str = Field(description="One concise question if trip details are missing; otherwise empty")
+    follow_up: str = Field(description="A concise follow-up or requested suggestions when no full plan is ready; otherwise empty")
     title: str = Field(description="A memorable trip title, or empty if not ready")
     summary: str = Field(description="A short trip summary, or empty if not ready")
     itinerary: str = Field(description="Day-by-day itinerary, or empty if not ready")
