@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAIError
 from pydantic import BaseModel, Field
 
@@ -12,6 +13,12 @@ app = FastAPI(
     title="AI Travel Advisor API",
     description="Create personalized travel plans with an AI advisor.",
     version="1.0.0",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 advisor = TravelAdvisor()
@@ -51,7 +58,10 @@ def chat(request: ChatRequest) -> ChatResponse:
 
 
     try:
-        answer, response_id = advisor.get_response(message)
+        answer, response_id = advisor.get_response(
+            message,
+            request.previous_response_id,
+        )
     except OpenAIError as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
