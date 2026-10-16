@@ -32,11 +32,34 @@ def main() -> None:
                 continue
 
             try:
-                answer, previous_response_id = advisor.get_response(
+                reply = advisor.get_response(
                     user_message,
                     previous_response_id,
                 )
-                print(f"\nAssistant: {answer}\n")
+                previous_response_id = reply.response_id
+                if reply.status == "needs_info":
+                    print(f"\nAssistant: {reply.message}\n")
+                    continue
+
+                plan = reply.plan
+                if plan is None:
+                    raise RuntimeError("The advisor returned no travel plan.")
+                answer_parts = [
+                    plan.title,
+                    plan.summary,
+                    "Itinerary",
+                    plan.itinerary,
+                    "Practical tips",
+                    plan.practical_tips,
+                    "Estimated budget",
+                    plan.budget,
+                ]
+                if plan.sources:
+                    answer_parts.extend(
+                        ["Sources", *(source.url for source in plan.sources)]
+                    )
+                answer = "\n".join(answer_parts)
+                print(f"\nAssistant:\n{answer}\n")
             except APIError as error:
                 print(f"\nOpenAI API error: {error}\n")
             except OpenAIError as error:

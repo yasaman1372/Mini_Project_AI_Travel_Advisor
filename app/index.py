@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from openai import OpenAIError
 from pydantic import BaseModel, Field
 
-from app.travel_advisor import TravelAdvisor
+from app.travel_advisor import AdvisorReply, TravelAdvisor
 
 
 load_dotenv()
@@ -35,13 +35,6 @@ class ChatRequest(BaseModel):
     previous_response_id: str | None = None
 
 
-class ChatResponse(BaseModel):
-    """The travel advisor response and its conversation identifier."""
-
-    answer: str
-    response_id: str
-
-
 @app.get("/", include_in_schema=False)
 def home() -> FileResponse:
     """Serve the static chat interface."""
@@ -56,8 +49,12 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
+@app.post(
+    "/chat",
+    response_model=AdvisorReply,
+    response_model_exclude_none=True,
+)
+def chat(request: ChatRequest) -> AdvisorReply:
     """Send one message in a client-managed conversation."""
 
     message = request.message.strip()
@@ -69,7 +66,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 
 
     try:
-        answer, response_id = advisor.get_response(
+        return advisor.get_response(
             message,
             request.previous_response_id,
         )
@@ -78,5 +75,3 @@ def chat(request: ChatRequest) -> ChatResponse:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The AI provider could not process the request.",
         ) from error
-    
-    return ChatResponse(answer=answer, response_id=response_id)

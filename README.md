@@ -77,12 +77,30 @@ Send a JSON request:
 }
 ```
 
-Example response:
+If more trip details are needed, the response contains a follow-up message:
 
 ```json
 {
-  "answer": "# Your Barcelona Trip\n...",
-  "response_id": "..."
+  "status": "needs_info",
+  "response_id": "...",
+  "message": "How many days will you be traveling?"
+}
+```
+
+When the required details are available, the response contains a structured plan:
+
+```json
+{
+  "status": "complete",
+  "response_id": "...",
+  "plan": {
+    "title": "A Taste of Barcelona",
+    "summary": "Three days of food and architecture.",
+    "itinerary": "Day 1: ...",
+    "practical_tips": "...",
+    "budget": "Estimated per-person budget: EUR 600.",
+    "sources": []
+  }
 }
 ```
 

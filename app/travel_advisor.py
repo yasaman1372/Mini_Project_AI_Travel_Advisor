@@ -3,6 +3,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
+from typing import Literal
 
 import requests
 from openai import OpenAI
@@ -13,30 +14,76 @@ MODEL = "gpt-6-luna"
 HTTP_TIMEOUT = (3, 5)
 MAX_TOOL_ROUNDS = 4
 
-SYSTEM_PROMPT = """
-You are a friendly, practical AI travel advisor. Before planning, make sure
-you know the destination, trip duration, and at least one travel interest.
-Ask one concise follow-up for missing essentials. Clarify conflicting details.
+SYSTEM_PROMPT = """You are a friendly, practical AI travel advisor.
+Help the user plan a personalized, realistic trip through conversation.
+Before generating an itinerary, make sure you know all three essentials:
+(1) destination,
+(2) trip duration (number of days or dates), and
+(3) at least one travel interest (for example food, museums, hiking, beaches,
+nightlife, or shopping).
 
-When those essentials are clear, provide a complete plan with a title, summary,
-day-by-day itinerary, practical tips, and estimated per-person budget. State
-assumptions when details are unknown.
+Ask one concise, natural follow-up covering only the missing essentials. Do not
+ask for optional preferences if the user has not volunteered them; use sensible
+assumptions instead.
+When any essential information is missing or contradictory, fill only
+follow_up and leave title, summary, itinerary, practical_tips, and budget empty.
 
-Use the weather and exchange-rate tools when relevant. Forecasts are only
-meaningful within the available forecast period; otherwise describe seasonal
-expectations. Use web search for current public-transport information when
-relevant. Prefer official sources, include source links, and be transparent
-about uncertainty. Respect user-provided accessibility, dietary, safety, and
-budget constraints.
+If the destination, dates, duration, or other details conflict or are materially
+ambiguous, ask the user to clarify before planning. Do not silently choose between
+contradictory details. Treat an explicit "surprise me" destination as permission
+to suggest a destination and proceed, while briefly stating your choice.
+
+Once the essentials are clear and there is no unresolved contradiction, provide
+the complete plan without asking for confirmation. Include a memorable trip title,
+a short summary, a day-by-day itinerary with a sensible pace, practical travel
+tips, and an estimated per-person budget with currency and a clear breakdown.
+State assumptions, especially when dates, departure city, or budget are unknown.
+When the plan is ready, leave follow_up empty and fill every plan field. Use plain
+text in each field, not Markdown headings or formatting.
+
+Use the weather and exchange-rate function tools when current weather or currency
+conversion is relevant to the user's request or itinerary. Weather forecasts are
+only meaningful within the available forecast period; beyond that, describe
+seasonal expectations instead. Label retrieved data with its date, and treat
+exchange rates as approximate mid-market rates, not guaranteed card or bank rates.
+Use web search for current public-transport options, operator information, or
+service changes. Prefer official sources. Do not claim live availability or
+opening hours. Include clickable source URLs for retrieved facts and recommend
+checking details before booking.
+
+Respect any accessibility, dietary, safety, or budget constraints the user mentions.
+Be transparent when a specific recommendation or cost is uncertain.
 """
 
 
 class Structure(BaseModel):
-    title: str = Field(description="A title for the trip or follow-up")
-    summary: str = Field(description="Trip summary or concise follow-up question")
+    follow_up: str = Field(description="One concise question if trip details are missing; otherwise empty")
+    title: str = Field(description="A memorable trip title, or empty if not ready")
+    summary: str = Field(description="A short trip summary, or empty if not ready")
     itinerary: str = Field(description="Day-by-day itinerary, or empty if not ready")
     practical_tips: str = Field(description="Practical travel tips, or empty if not ready")
     budget: str = Field(description="Estimated budget, or empty if not ready")
+
+
+class Source(BaseModel):
+    title: str
+    url: str
+
+
+class TravelPlan(BaseModel):
+    title: str
+    summary: str
+    itinerary: str
+    practical_tips: str
+    budget: str
+    sources: list[Source]
+
+
+class AdvisorReply(BaseModel):
+    status: Literal["needs_info", "complete"]
+    response_id: str
+    message: str | None = None
+    plan: TravelPlan | None = None
 
 
 TOOLS = [
@@ -188,30 +235,6 @@ def extract_web_sources(response) -> list[tuple[str, str]]:
     return sources
 
 
-def format_as_markdown(
-    trip: Structure, sources: list[tuple[str, str]]
-) -> str:
-    markdown = f"""# {trip.title}
-
-## Summary
-{trip.summary}
-
-## Day-by-day itinerary
-{trip.itinerary}
-
-## Practical tips
-{trip.practical_tips}
-
-## Estimated budget
-{trip.budget}"""
-
-    if sources:
-        links = "\n".join(f"- [{title}]({url})" for title, url in sources)
-        markdown += f"\n\n## Sources\n{links}"
-
-    return markdown
-
-
 class TravelAdvisor:
     """Creates travel advice while keeping conversation state in response IDs."""
 
@@ -223,7 +246,7 @@ class TravelAdvisor:
         # Avoid long automatic retries; callers can retry failed requests.
         self.client = OpenAI(
             api_key=api_key,
-            timeout=20.0,
+            timeout=60.0,
             max_retries=0,
         )
 
@@ -243,8 +266,8 @@ class TravelAdvisor:
         self,
         user_message: str,
         previous_response_id: str | None = None,
-    ) -> tuple[str, str]:
-        """Return the formatted answer and response ID for the next user turn."""
+    ) -> AdvisorReply:
+        """Return a follow-up or structured travel plan with its response ID."""
         response = self._request(user_message, previous_response_id)
         sources = []
 
@@ -290,5 +313,32 @@ class TravelAdvisor:
             raise RuntimeError("The model returned no structured response.")
 
         sources.extend(extract_web_sources(response))
-        answer = format_as_markdown(parsed, sources)
-        return answer, response.id
+        plan_sections = (
+            parsed.title,
+            parsed.summary,
+            parsed.itinerary,
+            parsed.practical_tips,
+            parsed.budget,
+        )
+        if parsed.follow_up.strip() or not all(
+            section.strip() for section in plan_sections
+        ):
+            return AdvisorReply(
+                status="needs_info",
+                message=parsed.follow_up.strip() or "What trip details would you like to add?",
+                response_id=response.id,
+            )
+
+        plan = TravelPlan(
+            title=parsed.title,
+            summary=parsed.summary,
+            itinerary=parsed.itinerary,
+            practical_tips=parsed.practical_tips,
+            budget=parsed.budget,
+            sources=[Source(title=title, url=url) for title, url in sources],
+        )
+        return AdvisorReply(
+            status="complete",
+            plan=plan,
+            response_id=response.id,
+        )

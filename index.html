@@ -26,6 +26,7 @@
     }
 
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
 
     body {
       margin: 0;
@@ -178,6 +179,11 @@
     .message-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.75; }
     .message.user .message-body { padding: 13px 16px; color: white; background: var(--green); }
     .message.assistant .message-body { padding: 2px 16px 2px 0; }
+    .plan-title { margin: 0 0 18px; font-family: "Playfair Display", Georgia, serif; font-size: 27px; font-weight: 500; line-height: 1.2; }
+    .plan-section { margin-top: 17px; }
+    .plan-section h3 { margin: 0 0 5px; color: #526b55; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .plan-section p { margin: 0; }
+    .plan-sources a { color: var(--green); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
     .suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
     .suggestion {
@@ -325,6 +331,61 @@
       return message;
     }
 
+    function addPlan(plan) {
+      const message = document.createElement("article");
+      message.className = "message assistant";
+      const label = document.createElement("p");
+      label.className = "message-label";
+      label.textContent = "Wayfarer";
+      const body = document.createElement("div");
+      body.className = "message-body";
+      const title = document.createElement("h2");
+      title.className = "plan-title";
+      title.textContent = plan.title;
+      body.append(title);
+
+      for (const [heading, value] of [
+        ["Summary", plan.summary],
+        ["Day-by-day itinerary", plan.itinerary],
+        ["Practical tips", plan.practical_tips],
+        ["Estimated budget", plan.budget]
+      ]) {
+        if (!value) continue;
+        const section = document.createElement("section");
+        section.className = "plan-section";
+        const sectionHeading = document.createElement("h3");
+        sectionHeading.textContent = heading;
+        const content = document.createElement("p");
+        content.textContent = value;
+        section.append(sectionHeading, content);
+        body.append(section);
+      }
+
+      if (Array.isArray(plan.sources) && plan.sources.length) {
+        const section = document.createElement("section");
+        section.className = "plan-section plan-sources";
+        const sectionHeading = document.createElement("h3");
+        sectionHeading.textContent = "Sources";
+        const list = document.createElement("ul");
+        for (const source of plan.sources) {
+          const item = document.createElement("li");
+          const link = document.createElement("a");
+          link.href = source.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = source.title || source.url;
+          item.append(link);
+          list.append(item);
+        }
+        section.append(sectionHeading, list);
+        body.append(section);
+      }
+
+      message.append(label, body);
+      messages.append(message);
+      message.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+
     async function checkHealth() {
       try {
         const response = await fetch(`${API_BASE}/health`);
@@ -362,13 +423,18 @@
           const detail = typeof data.detail === "string" ? data.detail : "The advisor could not answer just now. Please try again.";
           throw new Error(detail);
         }
-        if (typeof data.answer !== "string" || typeof data.response_id !== "string") {
+        if (typeof data.response_id !== "string") {
           throw new Error("The API response did not match the expected format.");
         }
         previousResponseId = data.response_id;
-        pending.querySelector(".message-label").textContent = "Wayfarer";
-        pending.querySelector(".message-body").classList.remove("typing");
-        pending.querySelector(".message-body").textContent = data.answer;
+        pending.remove();
+        if (data.status === "needs_info" && typeof data.message === "string") {
+          addMessage("assistant", data.message);
+        } else if (data.status === "complete" && data.plan && typeof data.plan.title === "string") {
+          addPlan(data.plan);
+        } else {
+          throw new Error("The API response did not match the expected format.");
+        }
         setStatus(true, "Ready to plan");
       } catch (error) {
         pending.remove();
