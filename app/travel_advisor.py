@@ -271,6 +271,7 @@ class TravelAdvisor:
     def _request(self, input_data, previous_response_id: str | None = None):
         request = {
             "model": MODEL,
+            "reasoning": {"effort": "low"},
             "instructions": SYSTEM_PROMPT,
             "input": input_data,
             "text_format": Structure,
